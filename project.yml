@@ -18,6 +18,9 @@ targets:
       properties:
         CFBundleDisplayName: Детские дела
         UILaunchScreen: {}
+        NSMicrophoneUsageDescription: "Для добавления дел голосом"
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.fazz.kidstasks

@@ -1,169 +1,137 @@
 import SwiftUI
+import WebKit
 
-struct TaskItem: Identifiable, Codable {
-    var id = UUID()
-    var title: String
-    var icon: String
-    var isDone: Bool = false
-    var stars: Int = 1
-}
-
-class KidsTasksViewModel: ObservableObject {
-    @Published var tasks: [TaskItem] = [
-        TaskItem(title: "Проснуться вовремя", icon: "sun.max.fill"),
-        TaskItem(title: "Почистить зубы", icon: "mouth.fill"),
-        TaskItem(title: "Заправить кровать", icon: "bed.double.fill"),
-        TaskItem(title: "Одеться в школу", icon: "tshirt.fill"),
-        TaskItem(title: "Собрать рюкзак", icon: "bag.fill"),
-        TaskItem(title: "Сделать уроки", icon: "book.fill", stars: 2),
-        TaskItem(title: "Убрать игрушки", icon: "cube.box.fill"),
-        TaskItem(title: "Почитать 15 минут", icon: "text.book.closed.fill", stars: 2)
-    ]
+struct WebView: UIViewRepresentable {
+    let url: URL
+    @Binding var isLoading: Bool
+    @Binding var canGoBack: Bool
+    @Binding var errorMessage: String?
     
-    @Published var totalStars: Int = 0
-    
-    func toggleTask(_ task: TaskItem) {
-        if let idx = tasks.firstIndex(where: { item in item.id == task.id }) {
-            tasks[idx].isDone.toggle()
-            if tasks[idx].isDone {
-                totalStars += tasks[idx].stars
-            } else {
-                totalStars = max(0, totalStars - tasks[idx].stars)
-            }
-        }
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
     }
     
-    func resetDay() {
-        for i in 0..<tasks.count {
-            tasks[i].isDone = false
+    func makeUIView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        config.websiteDataStore = WKWebsiteDataStore.default()
+        config.allowsInlineMediaPlayback = true
+        config.mediaTypesRequiringUserActionForPlayback = []
+        
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.navigationDelegate = context.coordinator
+        webView.allowsBackForwardNavigationGestures = true
+        webView.scrollView.bounces = true
+        
+        let refreshControl = UIRefreshControl()
+        refreshControl.addTarget(context.coordinator, action: #selector(Coordinator.handleRefresh(refreshControl:)), for: .valueChanged)
+        webView.scrollView.refreshControl = refreshControl
+        
+        context.coordinator.webView = webView
+        
+        let request = URLRequest(url: url, cachePolicy: .useProtocolCachePolicy, timeoutInterval: 25.0)
+        webView.load(request)
+        return webView
+    }
+    
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    
+    class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate {
+        var parent: WebView
+        weak var webView: WKWebView?
+        
+        init(_ parent: WebView) {
+            self.parent = parent
+        }
+        
+        @objc func handleRefresh(refreshControl: UIRefreshControl) {
+            webView?.reload()
+        }
+        
+        func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
+            DispatchQueue.main.async {
+                self.parent.isLoading = true
+                self.parent.errorMessage = nil
+            }
+        }
+        
+        func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+            DispatchQueue.main.async {
+                self.parent.isLoading = false
+                self.parent.canGoBack = webView.canGoBack
+                webView.scrollView.refreshControl?.endRefreshing()
+            }
+        }
+        
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            DispatchQueue.main.async {
+                self.parent.isLoading = false
+                self.parent.errorMessage = error.localizedDescription
+                webView.scrollView.refreshControl?.endRefreshing()
+            }
+        }
+        
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            DispatchQueue.main.async {
+                self.parent.isLoading = false
+                self.parent.errorMessage = error.localizedDescription
+                webView.scrollView.refreshControl?.endRefreshing()
+            }
         }
     }
 }
 
 struct ContentView: View {
-    @StateObject private var vm = KidsTasksViewModel()
+    @State private var isLoading = true
+    @State private var canGoBack = false
+    @State private var errorMessage: String? = nil
     
-    var completedCount: Int {
-        vm.tasks.filter { item in item.isDone }.count
-    }
+    let sashaURL = URL(string: "https://sasha.77-67-89-87.sslip.io")!
     
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Детские дела")
-                        .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.primary)
-                    Text("Выполнено: \(completedCount) из \(vm.tasks.count)")
-                        .font(.system(size: 15))
+        ZStack {
+            WebView(url: sashaURL, isLoading: , canGoBack: , errorMessage: )
+                .edgesIgnoringSafeArea(.bottom)
+            
+            if let error = errorMessage {
+                VStack(spacing: 16) {
+                    Image(systemName: "wifi.exclamationmark")
+                        .font(.system(size: 50))
+                        .foregroundColor(.orange)
+                    Text("Нет связи с сервером")
+                        .font(.title3)
+                        .bold()
+                    Text(error)
+                        .font(.caption)
                         .foregroundColor(.secondary)
-                }
-                Spacer()
-                // Star Counter
-                HStack(spacing: 6) {
-                    Image(systemName: "star.fill")
-                        .foregroundColor(.yellow)
-                        .font(.system(size: 24))
-                    Text("\(vm.totalStars)")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.primary)
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.yellow.opacity(0.2))
-                .cornerRadius(20)
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
-            
-            // Progress Bar
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.gray.opacity(0.2))
-                        .frame(height: 10)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
                     
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.green)
-                        .frame(width: max(0, geo.size.width * CGFloat(completedCount) / CGFloat(max(1, vm.tasks.count))), height: 10)
-                        .animation(.spring(), value: completedCount)
-                }
-            }
-            .frame(height: 10)
-            .padding(.horizontal, 20)
-            .padding(.bottom, 16)
-            
-            // Task List
-            ScrollView {
-                VStack(spacing: 12) {
-                    ForEach(vm.tasks) { task in
-                        Button(action: {
-                            vm.toggleTask(task)
-                        }) {
-                            HStack(spacing: 16) {
-                                Image(systemName: task.icon)
-                                    .font(.system(size: 24))
-                                    .foregroundColor(task.isDone ? .gray : .blue)
-                                    .frame(width: 36)
-                                
-                                Text(task.title)
-                                    .font(.system(size: 18, weight: .medium))
-                                    .strikethrough(task.isDone, color: .gray)
-                                    .foregroundColor(task.isDone ? .gray : .primary)
-                                
-                                Spacer()
-                                
-                                if task.isDone {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundColor(.green)
-                                        .font(.system(size: 26))
-                                } else {
-                                    HStack(spacing: 2) {
-                                        Text("+\(task.stars)")
-                                            .font(.system(size: 14, weight: .bold))
-                                            .foregroundColor(.orange)
-                                        Image(systemName: "star.fill")
-                                            .foregroundColor(.yellow)
-                                            .font(.system(size: 14))
-                                    }
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.orange.opacity(0.15))
-                                    .cornerRadius(12)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 14)
-                            .background(task.isDone ? Color.gray.opacity(0.1) : Color.white)
-                            .cornerRadius(16)
-                            .shadow(color: Color.black.opacity(task.isDone ? 0 : 0.05), radius: 4, x: 0, y: 2)
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 20)
-            }
-            
-            // Footer
-            if completedCount == vm.tasks.count && !vm.tasks.isEmpty {
-                VStack(spacing: 8) {
-                    Text("🎉 Все дела сделаны! Молодец!")
-                        .font(.system(size: 18, weight: .bold))
-                        .foregroundColor(.green)
                     Button(action: {
-                        vm.resetDay()
+                        errorMessage = nil
+                        isLoading = true
                     }) {
-                        Text("Начать новый день")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.blue)
+                        Text("Повторить попытку")
+                            .bold()
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 12)
+                            .background(Color.blue)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                     }
                 }
-                .padding(.vertical, 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(UIColor.systemBackground))
+            }
+            
+            if isLoading && errorMessage == nil {
+                VStack {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                        .padding()
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color(UIColor.systemBackground).opacity(0.3))
             }
         }
-        .background(Color(UIColor.systemGroupedBackground).edgesIgnoringSafeArea(.all))
     }
 }
