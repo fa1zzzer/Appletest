@@ -1,7 +1,7 @@
 import SwiftUI
 
 @main
-struct SmartAlarmApp: App {
+struct KidsTasksApp: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
