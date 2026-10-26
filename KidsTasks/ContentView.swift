@@ -23,7 +23,7 @@ class KidsTasksViewModel: ObservableObject {
     @Published var totalStars: Int = 0
     
     func toggleTask(_ task: TaskItem) {
-        if let idx = tasks.firstIndex(where: { /usr/bin/bash.id == task.id }) {
+        if let idx = tasks.firstIndex(where: { item in item.id == task.id }) {
             tasks[idx].isDone.toggle()
             if tasks[idx].isDone {
                 totalStars += tasks[idx].stars
@@ -44,7 +44,7 @@ struct ContentView: View {
     @StateObject private var vm = KidsTasksViewModel()
     
     var completedCount: Int {
-        vm.tasks.filter { /usr/bin/bash.isDone }.count
+        vm.tasks.filter { item in item.isDone }.count
     }
     
     var body: some View {
