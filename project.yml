@@ -17,6 +17,7 @@ targets:
       path: KidsTasks/Info.plist
       properties:
         CFBundleDisplayName: Детские дела
+        CFBundleIconName: AppIcon
         UILaunchScreen: {}
         NSMicrophoneUsageDescription: "Для добавления дел голосом"
         NSAppTransportSecurity:
@@ -24,3 +25,4 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.fazz.kidstasks
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
